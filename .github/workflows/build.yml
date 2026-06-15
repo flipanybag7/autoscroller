@@ -1,0 +1,66 @@
+name: Build AutoScroll IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app
+        run: |
+          xcodebuild build \
+            -project AutoScroll.xcodeproj \
+            -scheme AutoScroll \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath .build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Find .app
+        id: find_app
+        run: |
+          APP=$(find .build -name "AutoScroll.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: .app not found"
+            find .build -name "*.app" -type d
+            exit 1
+          fi
+          echo "APP_PATH=$APP" >> $GITHUB_OUTPUT
+          echo "Found app at: $APP"
+
+      - name: Clean .app for TrollStore
+        run: |
+          APP="${{ steps.find_app.outputs.APP_PATH }}"
+          find "$APP" -name "*.dSYM" -type d -exec rm -rf {} + 2>/dev/null || true
+          rm -rf "$APP/_CodeSignature" 2>/dev/null || true
+          rm -rf "$APP/SC_Info" 2>/dev/null || true
+          rm -f "$APP/embedded.mobileprovision" 2>/dev/null || true
+
+      - name: Package IPA
+        run: |
+          APP="${{ steps.find_app.outputs.APP_PATH }}"
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -r -0 AutoScroll.ipa Payload
+          rm -rf Payload
+          ls -lh AutoScroll.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoScroll
+          path: AutoScroll.ipa
+          retention-days: 7
