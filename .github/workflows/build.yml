@@ -16,6 +16,11 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Fix project format for Xcode 15
+        run: |
+          sed -i '' 's/objectVersion = 77;/objectVersion = 60;/' AutoScroll.xcodeproj/project.pbxproj
+          echo "Fixed objectVersion to 60"
+
       - name: Build app
         run: |
           xcodebuild build \
